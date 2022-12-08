@@ -8,7 +8,7 @@ from gameplay import test_pos_vs_nodes_table
 from levels import *
 from utils import clamp, range_adjust
 from statistics import mean
-from particles import InitParticle, UpdateParticleSystem
+from particles import InitParticle, UpdateParticleSystem, UpdateBlockParticleSystem
 from math import cos, sin
 
 level_idx = 0
@@ -77,8 +77,6 @@ text_render_state = hg.ComputeRenderState(hg.BM_Alpha, hg.DT_Always, hg.FC_Disab
 text_uniform_values_white = [hg.MakeUniformSetValue('u_color', hg.Vec4(1, 1, 1))]
 
 # sounds
-collect_coin_ref = hg.LoadWAVSoundAsset("audio/sfx/sfx_got_item.wav")
-collision_ref = hg.LoadWAVSoundAsset("audio/sfx/sfx_metal_col_0.wav")
 thrust_ref = hg.LoadWAVSoundAsset("audio/sfx/sfx_thrust.wav")
 dirty_thrust_ref = hg.LoadWAVSoundAsset("audio/sfx/sfx_thrust_dirty.wav")
 game_over_ref = hg.LoadWAVSoundAsset("audio/sfx/sfx_game_over.wav")
@@ -144,6 +142,16 @@ while not end_game:
 	music_source_state = hg.StereoSourceState(0.7, hg.SR_Loop)
 	current_music_source = hg.PlayStereo(current_music_ref, music_source_state)
 
+	#sound
+	if "sfx_collision" in levels[level_idx]:
+		collision_ref = hg.LoadWAVSoundAsset(levels[level_idx]['sfx_collision'])
+	else:
+		collision_ref = hg.LoadWAVSoundAsset("audio/sfx/sfx_metal_col_0.wav")
+	if "sfx_coin" in levels[level_idx]:
+		collect_coin_ref = hg.LoadWAVSoundAsset(levels[level_idx]['sfx_coin'])
+	else:
+		collect_coin_ref = hg.LoadWAVSoundAsset("audio/sfx/sfx_got_item.wav")
+
 	# background
 	hg.LoadSceneFromAssets(levels[level_idx]['background'], scene, res, hg.GetForwardPipelineInfo())
 
@@ -165,10 +173,14 @@ while not end_game:
 	bomb_homing = []
 	bonus_slow_clock = []
 	bonus_fast_clock = []
+	bonus_damage = []
+	bonus_damage_particles = []
 	engine_particles = []
 	coll_nodes = []
 	target_tex, _ = hg.LoadTextureFromAssets("assets/pod/touch_feedback.png", 0)
+	fire_tex, _ = hg.LoadTextureFromAssets("assets/pod/explosion.png", 0)
 	texture_smoke = hg.MakeUniformSetTexture("s_texTexture", target_tex, 0)
+	texture_fire = hg.MakeUniformSetTexture("s_texTexture", fire_tex, 0)
 	coll_id = 0
 	for i in range(nodes.size()):
 		nd = nodes.at(i)
@@ -192,6 +204,8 @@ while not end_game:
 			bonus_slow_clock.append({"node": nd, "pos": nd.GetTransform().GetPos()})
 		if nd.HasObject() and nd.GetName().lower() == "bonus_fast_clock":
 			bonus_fast_clock.append({"node": nd, "pos": nd.GetTransform().GetPos()})
+		if nd.HasObject() and nd.GetName().lower() == "bonus_damage":
+			bonus_damage.append({"node": nd, "pos": nd.GetTransform().GetPos()})
 
 	pod_bbox = hg.Vec3(3.0, 4.0, 2.0)
 
@@ -463,6 +477,30 @@ while not end_game:
 			bonus_fast_clock[fast_clock_hit]["node"].Disable()
 			time_factor *= 1.5
 
+		# take damages on bonus_damage
+		damage_hit = test_pos_vs_nodes_table(hg.GetTranslation(_pod_world), bonus_damage, 2.5)
+		if damage_hit > -1:
+			# print(fast_clock_hit)
+			life -= 10
+			InitParticle(bonus_damage_particles, bonus_damage[damage_hit]["pos"], 10, shader_texture, hg.Vec3(random_scale, random_scale, random_scale))
+			for x in range(0, 10):
+				bonus_damage_particles = UpdateBlockParticleSystem(bonus_damage_particles, render_state_quad_occluded, dtsmooth, cam_rot, view_id_scene_alpha, vtx_layout_particles, texture_fire)
+			bonus_damage[damage_hit]["node"].Disable()
+			bonus_damage_particles = []
+
+			# adding force vector tu push the pod
+			pushInX = 0
+			pushInY = 0
+			if hg.GetTranslation(_pod_world).y - bonus_damage[damage_hit]["pos"].y > 1:
+				pushInY = 100
+			if hg.GetTranslation(_pod_world).y - bonus_damage[damage_hit]["pos"].y < -1:
+				pushInY = -200
+			if hg.GetTranslation(_pod_world).x - bonus_damage[damage_hit]["pos"].x > 1:
+				pushInX = 100
+			if hg.GetTranslation(_pod_world).x - bonus_damage[damage_hit]["pos"].x < -1:
+				pushInX = -100
+			physics.NodeAddImpulse(pod_master, hg.Vec3(pushInX, pushInY, 0))
+
 
 		if collected_all_coins and life > 0:
 			if velocity < 0.1:
@@ -490,16 +528,16 @@ while not end_game:
 
 		# on-screen usage text
 		if(level_name == 'assets/titles/victory.scn'):
-			hg.DrawText(view_id, font, 'Restart game : Press R', font_program, 'u_tex', 0, hg.Mat4.Identity, hg.Vec3(200, res_y - 160, 0), hg.DTHA_Left, hg.DTVA_Bottom, text_uniform_values, [], text_render_state)
+			DrawTextShadow(view_id, font, 'Restart game : Press R', font_program, hg.Vec3(200, res_y - 160, 0), text_uniform_values, text_render_state)
 		else:
 			if aaa_rendering:
-				hg.DrawText(view_id, font, 'Render : AAA (K to Switch)', font_program, 'u_tex', 0, hg.Mat4.Identity, hg.Vec3(200, res_y - 160, 0), hg.DTHA_Left, hg.DTVA_Bottom, text_uniform_values, [], text_render_state)
+				DrawTextShadow(view_id, font, 'Render : AAA (K to Switch)', font_program, hg.Vec3(200, res_y - 160, 0), text_uniform_values, text_render_state)
 			else: 
-				hg.DrawText(view_id, font, 'Render : Basic (K to Switch)', font_program, 'u_tex', 0, hg.Mat4.Identity, hg.Vec3(200, res_y - 160, 0), hg.DTHA_Left, hg.DTVA_Bottom, text_uniform_values, [], text_render_state)
+				DrawTextShadow(view_id, font, 'Render : Basic (K to Switch)', font_program, hg.Vec3(200, res_y - 160, 0), text_uniform_values, text_render_state)
 
-			hg.DrawText(view_id, font, 'Restart Level: Press R', font_program, 'u_tex', 0, hg.Mat4.Identity, hg.Vec3(200, res_y - 120, 0), hg.DTHA_Left, hg.DTVA_Bottom, text_uniform_values, [], text_render_state)
-			hg.DrawText(view_id, font, 'Time factor: %f' % time_factor, font_program, 'u_tex', 0, hg.Mat4.Identity, hg.Vec3(200, res_y - 80, 0), hg.DTHA_Left, hg.DTVA_Bottom, text_uniform_values, [], text_render_state)
-			hg.DrawText(view_id, font, 'Level %d' % (level_idx + 1), font_program, 'u_tex', 0, hg.Mat4.Identity, hg.Vec3(200, res_y - 40, 0), hg.DTHA_Left, hg.DTVA_Bottom, text_uniform_values, [], text_render_state)
+			DrawTextShadow(view_id, font, 'Restart Level: Press R', font_program, hg.Vec3(200, res_y - 120, 0), text_uniform_values, text_render_state)
+			DrawTextShadow(view_id, font, 'Time factor: %f' % time_factor, font_program, hg.Vec3(200, res_y - 80, 0), text_uniform_values, text_render_state)
+			DrawTextShadow(view_id, font, 'Level %d' % (level_idx + 1), font_program, hg.Vec3(200, res_y - 40, 0), text_uniform_values, text_render_state)
 
 		if life < 1 or fuel < 1:
 			if velocity < 0.03:
@@ -509,6 +547,7 @@ while not end_game:
 		if level_restart and reset_game:
 			levels.append(reset_levels)
 			level_done = True
+			hg.StopSource(current_music_source)
 			compteur = 0
 			level_idx = 0
 		if level_restart == True and not_dead == True and reset_game == False:
