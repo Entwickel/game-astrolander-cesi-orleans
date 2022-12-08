@@ -127,6 +127,7 @@ while not end_game:
 	hg.LoadSceneFromAssets("assets/pod/pod.scn", scene, res, hg.GetForwardPipelineInfo())
 	fuel = 100.0
 	life = 100.0
+	ammo = 50
 	# 1 - normal / 2 - Quick / 0.5 - Slow
 	time_factor = 1.0
 	collected_all_coins = False
