@@ -9,6 +9,7 @@ from levels import *
 from utils import clamp, range_adjust
 from statistics import mean
 from particles import InitParticle, UpdateParticleSystem
+from math import cos, sin
 
 level_idx = 0
 consumption = 2.5
@@ -104,6 +105,14 @@ end_game = False
 aaa_rendering = False
 levels.append({"level" :"assets/titles/victory.scn", "music": "audio/music/children_of_science.wav", "background": "assets/background_1.scn"})
 
+
+def DrawTextShadow(_view_id, _font, _str, _font_program, _pos, _text_uniform_values, _text_render_state):
+	for a in range(0, 360, 10):
+		_offset = hg.Vec3(cos(a), sin(a), 0) * 1.5
+		hg.DrawText(_view_id, _font, _str, _font_program, 'u_tex', 0, hg.Mat4.Identity, _pos + _offset, hg.DTHA_Left, hg.DTVA_Bottom, [hg.MakeUniformSetValue('u_color', hg.Vec4(0,0,0,0.1))], [], _text_render_state)
+	hg.DrawText(_view_id, _font, _str, _font_program, 'u_tex', 0, hg.Mat4.Identity, _pos, hg.DTHA_Left, hg.DTVA_Bottom, _text_uniform_values, [], _text_render_state)
+
+
 while not end_game:
 	# Setup scene:
 	scene = hg.Scene()
@@ -123,6 +132,7 @@ while not end_game:
 	collected_all_coins = False
 	level_done = False
 	level_restart = False
+	not_dead = False
 	not_dead = False
 	restart_timer = 5
 
@@ -253,6 +263,12 @@ while not end_game:
 
 
 
+		if keyboard.Pressed(hg.K_R):
+			level_restart = True
+			not_dead = True
+
+
+
 		dt = hg.TickClock()
 		dt_history.append(hg.time_to_sec_f(dt))
 		if len(dt_history) > 120:
@@ -266,10 +282,13 @@ while not end_game:
 		thrust_left = False
 		thrust_right = False
 		thrust_up = False
+		thrust_up = False
 		if keyboard.Down(hg.K_Left):
 			thrust_left = True
 		if keyboard.Down(hg.K_Right):
 			thrust_right = True
+		if keyboard.Down(hg.K_Up):
+			thrust_up = True
 		if keyboard.Down(hg.K_Up):
 			thrust_up = True
 
@@ -332,7 +351,7 @@ while not end_game:
 				hg.SetSourceVolume(dirty_thrust_source, 1 - dirty_thrust_ratio)
 
 			# up
-			if thrust_up:
+			if thrust_up or (thrust_up):
 				physics.NodeAddForce(pod_master, hg.MakeVec3(hg.GetRow(_pod_world, 1) * pod_thrust), hg.GetTranslation(_pod_world))
 				flame_item_l.Enable()
 				flame_item_r.Enable()
@@ -341,7 +360,7 @@ while not end_game:
 				hg.SetSourceVolume(dirty_thrust_source, 1 - dirty_thrust_ratio)
 
 
-			if not thrust_left and not thrust_right and not thrust_up:
+			if not (thrust_left or thrust_right and not thrust_up or thrust_up):
 				flame_item_l.Disable()
 				flame_item_m.Disable()
 				flame_item_r.Disable()
@@ -445,23 +464,23 @@ while not end_game:
 		# on-screen usage text
 		hg.SetView2D(view_id, 0, 0, res_x, res_y, -1, 1, hg.CF_Depth, hg.Color.Black, 1, 0)
 		if aaa_rendering:
-			hg.DrawText(view_id, font, 'Render : AAA (K to Switch)', font_program, 'u_tex', 0, hg.Mat4.Identity, hg.Vec3(200, res_y - 120, 0), hg.DTHA_Left, hg.DTVA_Bottom, text_uniform_values, [], text_render_state)
+			DrawTextShadow(view_id, font, 'Render : AAA (K to Switch)', font_program, hg.Vec3(200, res_y - 120, 0), text_uniform_values, text_render_state)
 		else: 
-			hg.DrawText(view_id, font, 'Render : Basic (K to Switch)', font_program, 'u_tex', 0, hg.Mat4.Identity, hg.Vec3(200, res_y - 120, 0), hg.DTHA_Left, hg.DTVA_Bottom, text_uniform_values, [], text_render_state)
+			DrawTextShadow(view_id, font, 'Render : Basic (K to Switch)', font_program, hg.Vec3(200, res_y - 120, 0), text_uniform_values, text_render_state)
 
-		hg.DrawText(view_id, font, 'Time factor: %f' % time_factor, font_program, 'u_tex', 0, hg.Mat4.Identity, hg.Vec3(200, res_y - 80, 0), hg.DTHA_Left, hg.DTVA_Bottom, text_uniform_values, [], text_render_state)
-		hg.DrawText(view_id, font, 'Level %d' % (level_idx + 1), font_program, 'u_tex', 0, hg.Mat4.Identity, hg.Vec3(200, res_y - 40, 0), hg.DTHA_Left, hg.DTVA_Bottom, text_uniform_values, [], text_render_state)
+		DrawTextShadow(view_id, font, 'Time factor: %f' % time_factor, font_program, hg.Vec3(200, res_y - 80, 0), text_uniform_values, text_render_state)
+		DrawTextShadow(view_id, font, 'Level %d' % (level_idx + 1), font_program, hg.Vec3(200, res_y - 40, 0), text_uniform_values, text_render_state)
 		if life < 1 or fuel < 1:
 			if velocity < 0.03:
 				level_restart = True
 				hg.PlayStereo(game_over_ref, source_state)
 		
 		if level_restart == True and not_dead == True:
-			hg.DrawText(view_id, font, 'RESTARTING LEVEL IN ' + str(restart_timer)[:3] + ' SECONDS', font_program, 'u_tex', 0, hg.Mat4.Identity, hg.Vec3(res_x / 2, res_y / 2 + 100, 0), hg.DTHA_Left, hg.DTVA_Bottom, text_uniform_values, [], text_render_state)
+			DrawTextShadow(view_id, font, 'RESTARTING LEVEL IN ' + str(restart_timer)[:3] + ' SECONDS', font_program, hg.Vec3(res_x / 2, res_y / 2 + 100, 0), text_uniform_values, text_render_state)
 			restart_timer -= dtsmooth
 		if level_restart == True and restart_timer > 0 and not_dead == False:
-			hg.DrawText(view_id, font, 'GAME OVER', font_program, 'u_tex', 0, hg.Mat4.Identity, hg.Vec3(res_x / 2, res_y / 2, 0), hg.DTHA_Left, hg.DTVA_Bottom, text_uniform_values, [], text_render_state)
-			hg.DrawText(view_id, font, 'RESTARTING LEVEL IN ' + str(restart_timer)[:3] + ' SECONDS', font_program, 'u_tex', 0, hg.Mat4.Identity, hg.Vec3(res_x / 2, res_y / 2 + 100, 0), hg.DTHA_Left, hg.DTVA_Bottom, text_uniform_values, [], text_render_state)
+			DrawTextShadow(view_id, font, 'GAME OVER', font_program, hg.Vec3(res_x / 2, res_y / 2, 0), text_uniform_values, text_render_state)
+			DrawTextShadow(view_id, font, 'RESTARTING LEVEL IN ' + str(restart_timer)[:3] + ' SECONDS', font_program, hg.Vec3(res_x / 2, res_y / 2 + 100, 0), text_uniform_values, text_render_state)
 			restart_timer -= dtsmooth
 
 		elif restart_timer < 0:
@@ -471,12 +490,17 @@ while not end_game:
 			txt_col = text_uniform_values
 		else:
 			txt_col = text_uniform_values_white
-		hg.DrawText(view_id, font, '%d Coins' % len(coins), font_program, 'u_tex', 0, hg.Mat4.Identity, hg.Vec3(res_x - 200, res_y - 120, 0), hg.DTHA_Left, hg.DTVA_Bottom, txt_col, [], text_render_state)
-		hg.DrawText(view_id, font, 'Life: %d' % life, font_program, 'u_tex', 0, hg.Mat4.Identity, hg.Vec3(res_x - 200, res_y - 80, 0), hg.DTHA_Left, hg.DTVA_Bottom, text_uniform_values, [], text_render_state)
-		hg.DrawText(view_id, font, 'Fuel: %d' % fuel, font_program, 'u_tex', 0, hg.Mat4.Identity, hg.Vec3(res_x - 200, res_y - 40, 0), hg.DTHA_Left, hg.DTVA_Bottom, text_uniform_values, [], text_render_state)
+		DrawTextShadow(view_id, font, '%d Coins' % len(coins), font_program, hg.Vec3(res_x - 200, res_y - 120, 0), txt_col, text_render_state)
+		DrawTextShadow(view_id, font, 'Life: %d' % life, font_program, hg.Vec3(res_x - 200, res_y - 80, 0), text_uniform_values, text_render_state)
+		DrawTextShadow(view_id, font, 'Fuel: %d' % fuel, font_program, hg.Vec3(res_x - 200, res_y - 40, 0), text_uniform_values, text_render_state)
+
+		# display FPS
+		if hg.time_to_sec_f(dt) > 0.0:
+			DrawTextShadow(view_id, font, 'FPS: %i' % int(1.0 / hg.time_to_sec_f(dt)), font_program, hg.Vec3(16, 16, 0), text_uniform_values, text_render_state)
 		# display FPS
 		if hg.time_to_sec_f(dt) > 0.0:
 			hg.DrawText(view_id, font, 'FPS: %i' % int(1.0 / hg.time_to_sec_f(dt)), font_program, 'u_tex', 0, hg.Mat4.Identity, hg.Vec3(16, 16, 0), hg.DTHA_Left, hg.DTVA_Bottom, text_uniform_values, [], text_render_state)
+
 
 
 		# debug physics
